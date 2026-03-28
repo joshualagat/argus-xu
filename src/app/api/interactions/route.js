@@ -17,7 +17,10 @@ export async function POST(req) {
 
     // 1. Acknowledge server Ping checks from Discord
     if (command.type === InteractionType.PING) {
-        return Response.json({ type: InteractionResponseType.PONG });
+        return new Response(JSON.stringify({ type: 1 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     // 2. Handle /submit Command
@@ -100,7 +103,10 @@ export async function POST(req) {
         processBackground().catch(console.error);
 
         // Immediately respond to Discord with user-facing 'Bot is thinking...'
-        return Response.json({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE });
+        return new Response(JSON.stringify({ type: 5 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     return new Response('Unknown command executed', { status: 400 });
