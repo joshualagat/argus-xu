@@ -1,6 +1,6 @@
 import { verifyKey, InteractionResponseType, InteractionType } from 'discord-interactions';
-import { extractFinancialData } from '../../../../geminiManager.js';
-import { ensureUserTab, appendOrders } from '../../../../sheetsManager.js';
+import { extractFinancialData } from '../../../geminiManager.js';
+import { ensureUserTab, appendOrders } from '../../../sheetsManager.js';
 
 export async function POST(req) {
     const rawBody = await req.text();
@@ -22,7 +22,7 @@ export async function POST(req) {
 
     // 2. Handle /submit Command
     if (command.type === InteractionType.APPLICATION_COMMAND && command.data.name === 'submit') {
-        
+
         // Define the background processing 
         const processBackground = async () => {
             const token = command.token;
@@ -47,7 +47,7 @@ export async function POST(req) {
                     await sendFollowup("⚠️ Error: You must attach a screenshot containing financial data to use this command.");
                     return;
                 }
-                
+
                 const attachmentKey = Object.keys(attachments)[0];
                 const imageFile = attachments[attachmentKey];
 
@@ -63,7 +63,7 @@ export async function POST(req) {
 
                 // Pass to our custom Gemini Extractor manager
                 const orders = await extractFinancialData(imageBuffer, imageFile.content_type);
-                
+
                 if (!orders || orders.length === 0) {
                     await sendFollowup("No recognizable position data could be parsed from the image.");
                     return;
@@ -79,7 +79,7 @@ export async function POST(req) {
                 if (sheetsResult.success) {
                     reportText += `✅ **Success**: ${sheetsResult.count} new trades securely synced!`;
                     if (sheetsResult.ignored > 0) {
-                         reportText += `\n*Ignored ${sheetsResult.ignored} duplicate(s) successfully.*`;
+                        reportText += `\n*Ignored ${sheetsResult.ignored} duplicate(s) successfully.*`;
                     }
                 } else {
                     reportText += `⚠️ **Rejected**: ${sheetsResult.reason}`;
