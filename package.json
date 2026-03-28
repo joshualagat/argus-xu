@@ -1,5 +1,5 @@
 {
-  "name": "discord-financial-bot-nextjs",
+  "name": "argus-xu",
   "version": "1.0.0",
   "description": "Discord Vercel interaction handler to extract financial data using Gemini",
   "type": "module",
