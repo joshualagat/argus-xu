@@ -10,7 +10,10 @@ function getSpreadsheetId() {
 }
 
 const auth = new google.auth.GoogleAuth({
-    keyFile: path.resolve(process.cwd(), 'GOOGLE_APPLICATION_CREDENTIALS.json'),
+    // Vercel deployment support: Use stringified JSON env var first, otherwise fallback to local file
+    ...(process.env.GOOGLE_CREDENTIALS
+        ? { credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS) }
+        : { keyFile: path.resolve(process.cwd(), 'GOOGLE_APPLICATION_CREDENTIALS.json') }),
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
@@ -23,12 +26,12 @@ export async function ensureUserTab(username) {
     const spreadsheetId = getSpreadsheetId();
     const res = await sheets.spreadsheets.get({ spreadsheetId });
     const existingSheets = res.data.sheets.map(s => s.properties.title);
-    
+
     if (!existingSheets.includes(username)) {
         await sheets.spreadsheets.batchUpdate({
             spreadsheetId,
             requestBody: {
-                requests: [ { addSheet: { properties: { title: username } } } ]
+                requests: [{ addSheet: { properties: { title: username } } }]
             }
         });
 
@@ -58,16 +61,16 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
     const rows = res.data.values || [];
 
     const newRows = [];
-    
+
     for (const orderData of orderArray) {
         let isDuplicate = false;
-        
+
         // 1. Check against Google Sheet legacy rows
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             if (!row) continue;
             const [, rowSymbol, rowSide, rowQty, rowPrice] = row;
-            
+
             if (
                 String(rowSymbol).trim() === String(orderData.symbol).trim() &&
                 String(rowSide).trim() === String(orderData.side).trim() &&
