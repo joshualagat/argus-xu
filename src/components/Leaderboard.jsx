@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { getLeaderboardData } from '../sheetsManager.js';
 import { Trophy, Activity, Network } from 'lucide-react';
 
@@ -31,6 +32,18 @@ export default async function Leaderboard() {
 
             {/* Ambient Radial Gradient Blur (Bitcoin Orange) */}
             <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[#F7931A] rounded-full opacity-5 blur-[120px] pointer-events-none z-0" />
+
+            {/* Top Centered Logo provided by User */}
+            <div className="relative z-10 w-full flex justify-center mb-12">
+                <Image 
+                    src="/logo.png" 
+                    alt="Argus Logo" 
+                    width={300} 
+                    height={100} 
+                    className="object-contain drop-shadow-[0_0_15px_rgba(247,147,26,0.3)]"
+                    priority
+                />
+            </div>
 
             {/* The Main "Block" Container (Glassmorphic Card) */}
             <div className="relative z-10 w-full max-w-4xl mx-auto bg-[#0F1115]/90 backdrop-blur-lg border border-white/10 rounded-2xl shadow-[0_0_50px_-10px_rgba(247,147,26,0.1)] overflow-hidden transition-all duration-300 hover:border-[#F7931A]/30">
