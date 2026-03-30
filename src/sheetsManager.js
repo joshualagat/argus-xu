@@ -35,7 +35,7 @@ export async function ensureUserTab(username) {
             }
         });
 
-        const headers = ["Timestamp", "Symbol", "Side", "Quantity", "Avg Fill Price", "Account Balance", "Total P&L"];
+        const headers = ["Timestamp", "Symbol", "Side", "Quantity", "Avg Fill Price", "Equity", "Total P&L"];
         await sheets.spreadsheets.values.update({
             spreadsheetId,
             range: `${username}!A1:G1`,
@@ -103,7 +103,7 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
                 orderData.side,
                 orderData.qty,
                 orderData.avgFillPrice,
-                orderData.accountBalance,
+                orderData.equity,
                 orderData.totalPnL
             ]);
         }
@@ -278,13 +278,13 @@ export async function getLeaderboardData() {
             const username = row[1] || "";
             
             // Equity should theoretically be in index 4, but if middle columns are empty, Sheets sometimes truncates the array length. We take the last available index if length < 5
-            const accountBalance = row.length > 2 ? row[row.length - 1] : "";
+            const equityVal = row.length > 2 ? row[row.length - 1] : "";
 
             if (username) {
                 leaderboardArray.push({
                     "POSITION": position,
                     "USERNAMES": username,
-                    "ACCOUNT BALANACE": accountBalance
+                    "EQUITY": equityVal
                 });
             }
         }
