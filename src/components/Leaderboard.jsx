@@ -2,8 +2,8 @@ import React from 'react';
 import { getLeaderboardData } from '../sheetsManager.js';
 import { Trophy, Activity, Network } from 'lucide-react';
 
-// Force Next.js to statically cache this layout payload for 30 minutes! (1800 seconds)
-export const revalidate = 1800;
+// Force Next.js to statically cache this layout payload for 5 seconds
+export const revalidate = 5;
 
 /**
  * Server Component specifically engineered for the "Bitcoin DeFi" Design System.
