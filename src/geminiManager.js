@@ -19,13 +19,13 @@ Output a strictly valid JSON document containing the following structure:
       "side": "(string) Direction of trade: 'Long', 'Short', 'Buy', or 'Sell'",
       "qty": (number) The quantity or size of the position,
       "avgFillPrice": (number) The recorded average fill price, stripping out commas,
-      "equity": (number) The total Account Equity (including Unrealized P&L). Look EXPLICITLY for "Equity", stripping commas,
+      "accountBalance": (number) The total Account Equity (which includes Unrealized P&L). You MUST extract the "Equity" stat on the screen and completely ignore the raw Account Balance. Strip commas,
       "totalPnL": (number) The summarized total PNL, stripping commas
     }
   ]
 }
 
-Even if only one position is found, wrap it in the \`orders\` array. If no positions are found, return an empty array for \`orders\`. Remember to apply the \`equity\` and \`totalPnL\` to every object in the \`orders\` array if found globally!
+Even if only one position is found, wrap it in the \`orders\` array. If no positions are found, return an empty array for \`orders\`. Remember to apply the \`accountBalance\` and \`totalPnL\` to every object in the \`orders\` array if found globally!
 
 **Strict Output Constraint:** Do absolutely not include Markdown wrappers (e.g. \`\`\`json). Output raw parseable JSON only.
     `;
