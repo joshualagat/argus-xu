@@ -122,3 +122,182 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
 
     return { success: false, reason: `Ignored all ${orderArray.length} position(s) because they were already in the Google Sheet.` };
 }
+
+/**
+ * Crawls every single user tab safely, locates their most recent Account Balance,
+ * overwrites the Leaderboard_Data tab safely for Vercel, and syncs the visual Top 5 UI.
+ */
+export async function syncGlobalLeaderboard() {
+    const spreadsheetId = getSpreadsheetId();
+    
+    // 1. Fetch all sheet names globally
+    let allSheetNames = [];
+    try {
+        const res = await sheets.spreadsheets.get({ spreadsheetId });
+        allSheetNames = res.data.sheets.map(s => s.properties.title);
+    } catch (e) {
+        console.error("Failed to read sheet names:", e.message);
+        return;
+    }
+    
+    // 2. Automatically ensure Leaderboard_Data exists behind the scenes
+    if (!allSheetNames.includes("Leaderboard_Data")) {
+        try {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: { requests: [{ addSheet: { properties: { title: "Leaderboard_Data" } } }] }
+            });
+            allSheetNames.push("Leaderboard_Data");
+            console.log(`Auto-created missing data tab: Leaderboard_Data`);
+        } catch (e) {
+            console.error("Failed to create Leaderboard_Data tab:", e.message);
+        }
+    }
+
+    // 3. Filter out non-user config tabs
+    const excludeTabs = ["leaderboard", "Leaderboard_Data", "Summary", "Notes"]; 
+    const userTabs = allSheetNames.filter(name => !excludeTabs.includes(name));
+
+    if (userTabs.length === 0) {
+        console.log("No user tabs found to synchronize.");
+        return;
+    }
+
+    // 4. BatchGet Column F (Account Balance) for ALL user tabs simultaneously (High Performance)
+    const ranges = userTabs.map(tab => `'${tab}'!F:F`);
+    
+    let batchRes;
+    try {
+        batchRes = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges });
+    } catch (e) {
+        console.error("Global Leaderboard BatchGet error:", e.message);
+        return;
+    }
+
+    const valueRanges = batchRes.data.valueRanges || [];
+    const consolidatedData = [];
+
+    // 5. Parse the absolute last recorded Account Balance value in Column F for every user
+    valueRanges.forEach((rangeObj, index) => {
+        const username = userTabs[index];
+        const values = rangeObj.values;
+        if (values && values.length > 0) {
+            let latestEquity = null;
+            // Iterate backwards up the column to find the first non-empty numeric value
+            for (let i = values.length - 1; i >= 0; i--) {
+                const cellVal = values[i][0];
+                if (cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== "") {
+                    // Quick comma strip just in case
+                    const parsed = parseFloat(String(cellVal).replace(/,/g, ''));
+                    if (!isNaN(parsed)) {
+                        latestEquity = parsed;
+                        break;
+                    }
+                }
+            }
+            if (latestEquity !== null) {
+                consolidatedData.push({ name: username, val: latestEquity });
+            }
+        }
+    });
+
+    // 6. Overwrite Leaderboard_Data!A:B safely and comprehensively
+    try {
+        await sheets.spreadsheets.values.clear({
+            spreadsheetId,
+            range: `Leaderboard_Data!A:B`
+        });
+
+        const exportRows = [["TradingView Username", "Latest Equity"]];
+        consolidatedData.forEach(userObj => exportRows.push([userObj.name, userObj.val]));
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `Leaderboard_Data!A:B`,
+            valueInputOption: "USER_ENTERED",
+            insertDataOption: "INSERT_ROWS",
+            requestBody: { values: exportRows }
+        });
+    } catch (e) {
+        console.error("Failed to write to Leaderboard_Data:", e.message);
+    }
+
+    // 7. Sort the Master List natively sorting highest equity to lowest
+    consolidatedData.sort((a, b) => b.val - a.val);
+    const top5 = consolidatedData.slice(0, 5);
+
+    // 8. Bulk write directly to the visual top 5 UI mapping (leaderboard!B4:E8)
+    const templateRows = [];
+    for (let i = 0; i < 5; i++) {
+        if (i < top5.length) {
+            templateRows.push([top5[i].name, "", "", top5[i].val]);
+        } else {
+            templateRows.push(["", "", "", ""]); // Clear out empties physically mapping B, C, D, E columns
+        }
+    }
+
+    try {
+        await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `leaderboard!B4:E8`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: templateRows }
+        });
+        console.log(`Successfully synced Global Leaderboard for ${consolidatedData.length} total players!`);
+    } catch (e) {
+        console.error("Leaderboard UI Update failed. Did you name your frontend tab exactly 'leaderboard'?", e.message);
+    }
+}
+
+/**
+ * Utility function designed for your future Vercel frontend dashboard.
+ * Connects to the Google Sheet and reads the visual 'leaderboard' tab (A4:E8).
+ * Returns the exact JSON array structure requested.
+ */
+export async function getLeaderboardData() {
+    const spreadsheetId = getSpreadsheetId();
+    
+    // Fetch specifically the visual leaderboard block (A4:E8)
+    const range = `leaderboard!A4:E8`;
+
+    try {
+        const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+        const rows = res.data.values || [];
+
+        const leaderboardArray = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            
+            // Based on the template:
+            // A4 = Position (row[0])
+            // B4:D4 = Username (row[1])
+            // E4 = Equity (row[4] - but if C and D are empty strings, it might technically be row[2] or row[3] if the array suppresses trailing empties. Safely extracting the last element:
+            
+            const position = row[0] || `${i + 1}th`;
+            const username = row[1] || "";
+            
+            // Equity should theoretically be in index 4, but if middle columns are empty, Sheets sometimes truncates the array length. We take the last available index if length < 5
+            const accountBalance = row.length > 2 ? row[row.length - 1] : "";
+
+            if (username) {
+                leaderboardArray.push({
+                    "POSITION": position,
+                    "USERNAMES": username,
+                    "ACCOUNT BALANACE": accountBalance
+                });
+            }
+        }
+
+        // Return the exact structure requested: Array of objects containing an array of objects under 'LEADERBOARD' header
+        return [
+            {
+                "LEADERBOARD": leaderboardArray
+            }
+        ];
+
+    } catch (e) {
+        console.error("Failed to read Leaderboard Data for frontend:", e.message);
+        return [{ "LEADERBOARD": [] }];
+    }
+}
