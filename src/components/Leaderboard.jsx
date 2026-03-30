@@ -72,10 +72,11 @@ export default async function Leaderboard() {
                             const username = user["USERNAMES"];
                             const balanceRaw = user["ACCOUNT BALANACE"]; // Safely parsing the requested typo key
 
+                            const cleanBalance = balanceRaw || 0;
                             // Clean number formatting with JetBrains Mono precision
-                            const formattedBalance = typeof balanceRaw === 'number' 
-                                ? balanceRaw.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                                : (balanceRaw.includes('$') ? balanceRaw : `$${parseFloat(balanceRaw).toLocaleString('en-US') || balanceRaw}`);
+                            const formattedBalance = typeof cleanBalance === 'number' 
+                                ? cleanBalance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                                : (String(cleanBalance).includes('$') ? String(cleanBalance) : `$${parseFloat(cleanBalance).toLocaleString('en-US') || String(cleanBalance)}`);
 
                             return (
                                 <div 
