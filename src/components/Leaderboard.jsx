@@ -87,9 +87,15 @@ export default async function Leaderboard() {
 
                             const cleanBalance = balanceRaw || 0;
                             // Clean number formatting with JetBrains Mono precision
-                            const formattedBalance = typeof cleanBalance === 'number' 
-                                ? cleanBalance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                                : (String(cleanBalance).includes('$') ? String(cleanBalance) : `$${parseFloat(cleanBalance).toLocaleString('en-US') || String(cleanBalance)}`);
+                            const cleanString = String(cleanBalance).replace(/[$,]/g, '').trim();
+                            const parsedFloat = parseFloat(cleanString) || 0;
+                            
+                            const formattedBalance = parsedFloat.toLocaleString('en-US', { 
+                                style: 'currency', 
+                                currency: 'USD',
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                            });
 
                             return (
                                 <div 
