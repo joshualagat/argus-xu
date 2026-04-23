@@ -28,21 +28,30 @@ export async function ensureUserTab(username) {
     const existingSheets = res.data.sheets.map(s => s.properties.title);
 
     if (!existingSheets.includes(username)) {
-        await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-                requests: [{ addSheet: { properties: { title: username } } }]
-            }
-        });
+        try {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    requests: [{ addSheet: { properties: { title: username } } }]
+                }
+            });
 
-        const headers = ["Timestamp", "Symbol", "Side", "Quantity", "Avg Fill Price", "Equity", "Total P&L"];
-        await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: `${username}!A1:G1`,
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values: [headers] }
-        });
-        console.log(`Created new tab for user: ${username}`);
+            const headers = ["Timestamp", "Symbol", "Side", "Quantity", "Avg Fill Price", "Account Balance", "Total P&L"];
+            await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `${username}!A1:G1`,
+                valueInputOption: "USER_ENTERED",
+                requestBody: { values: [headers] }
+            });
+            console.log(`Created new tab for user: ${username}`);
+        } catch (e) {
+            // If the tab already exists (race condition / duplicate request), that's fine — just continue
+            if (e?.errors?.[0]?.reason === 'badRequest' && e?.errors?.[0]?.message?.includes('already exists')) {
+                console.log(`Tab "${username}" already exists, skipping creation.`);
+            } else {
+                throw e; // Re-throw any other unexpected errors
+            }
+        }
     }
 }
 
@@ -69,11 +78,12 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             if (!row) continue;
-            const [, rowSymbol, rowSide, rowQty, rowPrice] = row;
+            // Destructure to include the Timestamp mapping (row[0] is Column A)
+            const [rowTimestamp, rowSymbol, rowSide, rowQty, rowPrice] = row;
 
             if (
-                String(rowSymbol).trim() === String(orderData.symbol).trim() &&
-                String(rowSide).trim() === String(orderData.side).trim() &&
+                String(rowTimestamp).trim() === String(orderData.timestamp || "").trim() &&
+                String(rowSymbol).trim() === String(orderData.symbol || "").trim() &&
                 parseFloat(rowQty) === parseFloat(orderData.qty) &&
                 parseFloat(rowPrice) === parseFloat(orderData.avgFillPrice)
             ) {
@@ -84,10 +94,10 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
 
         // 2. Check against rows we are staging to insert to avoid identical rows in the same batch
         for (const staged of newRows) {
-            const [, rowSymbol, rowSide, rowQty, rowPrice] = staged;
+            const [rowTimestamp, rowSymbol, rowSide, rowQty, rowPrice] = staged;
             if (
-                String(rowSymbol).trim() === String(orderData.symbol).trim() &&
-                String(rowSide).trim() === String(orderData.side).trim() &&
+                String(rowTimestamp).trim() === String(orderData.timestamp || "").trim() &&
+                String(rowSymbol).trim() === String(orderData.symbol || "").trim() &&
                 parseFloat(rowQty) === parseFloat(orderData.qty) &&
                 parseFloat(rowPrice) === parseFloat(orderData.avgFillPrice)
             ) {
@@ -98,13 +108,13 @@ export async function appendOrders(username, orderArray, discordTimestamp) {
 
         if (!isDuplicate) {
             newRows.push([
-                new Date(discordTimestamp).toISOString(),
-                orderData.symbol,
-                orderData.side,
-                orderData.qty,
-                orderData.avgFillPrice,
-                orderData.equity,
-                orderData.totalPnL
+                orderData.timestamp || new Date(discordTimestamp).toISOString(),
+                orderData.symbol || "Unknown",
+                orderData.side || "-",
+                orderData.qty || 0,
+                orderData.avgFillPrice || 0,
+                orderData.accountBalance || 0,
+                orderData.totalPnL || 0
             ]);
         }
     }
@@ -269,22 +279,25 @@ export async function getLeaderboardData() {
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             
-            // Based on the template:
             // A4 = Position (row[0])
-            // B4:D4 = Username (row[1])
-            // E4 = Equity (row[4] - but if C and D are empty strings, it might technically be row[2] or row[3] if the array suppresses trailing empties. Safely extracting the last element:
+            // B4 = Username (row[1])
+            // E4 = Equity (row[4] typically, since we requested A4:E8)
+            // But if D, C, B, A are empty, the array might be truncated.
+            // Since we explicitly want E4, we should safely fall back.
             
             const position = row[0] || `${i + 1}th`;
             const username = row[1] || "";
             
-            // Equity should theoretically be in index 4, but if middle columns are empty, Sheets sometimes truncates the array length. We take the last available index if length < 5
-            const equityVal = row.length > 2 ? row[row.length - 1] : "";
+            // If the row has 5 elements, E is at index 4. 
+            // If it has fewer, E was either blank, or the array is truncated.
+            // Google Sheets drops trailing blanks. If E has data, row length MUST be 5.
+            const accountBalance = row.length >= 5 ? row[4] : (row.length > 2 ? row[row.length - 1] : "0");
 
             if (username) {
                 leaderboardArray.push({
                     "POSITION": position,
                     "USERNAMES": username,
-                    "EQUITY": equityVal
+                    "ACCOUNT BALANACE": accountBalance
                 });
             }
         }
